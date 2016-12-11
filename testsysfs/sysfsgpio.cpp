@@ -1,4 +1,5 @@
 #include "sysfsgpio.h"
+#include "QDebug"
 
 #define IN 0
 #define OUT 1
@@ -23,7 +24,8 @@ SysfsGpio::SysfsGpio(int pin)
     }
     GPIOExport(); //Makes sure the pin is exported to userspace
     sleep(1); //Delay for at sikker sig at sysfs kan følge med
-    GPIODirection(OUT);
+    GPIODirection(IN);
+    GPIOEdge("rising");
 
 }
 
@@ -74,9 +76,9 @@ int SysfsGpio::GPIOUnexport()
     int fd;
      //Opens gpio Export file, with  only write  permission
     fd = open("/sys/class/gpio/unexport", O_WRONLY);
-    if (-1 == fd) { //check if open failed
+    if (fd == -1) { //check if open failed
         fprintf(stderr, "Failed to open unexport for writing!\n");
-        return(-1);
+        return -1;
     }
     //writes pin_ to bytes written
     bytes_written = snprintf(buffer, BUFFER_MAX, "%d", pin_);
@@ -102,14 +104,14 @@ int SysfsGpio::GPIODirection(int dir)
     // writes "/sys/class/gpio/gpio%d/direction" to path, with pin_ replace %d
     snprintf(path, DIRECTION_MAX, "/sys/class/gpio/gpio%d/direction", pin_);
     fd = open(path, O_WRONLY); //Open the file with write permission.
-    if (-1 == fd) {
+    if (fd == -1) {
         fprintf(stderr, "Failed to open gpio direction for writing!\n");
         return(-1);
     }
 
     if (-1 == write(fd, &s_directions_str[IN == dir ? 0 : 3], IN == dir ? 2 : 3)) {
         fprintf(stderr, "Failed to set direction!\n");
-        return(-1);
+        return -1;
     }
 
     close(fd);
@@ -130,18 +132,42 @@ int SysfsGpio::GPIOWrite(int value)
 
     snprintf(path, VALUE_MAX, "/sys/class/gpio/gpio%d/value", pin_);
     fd = open(path, O_WRONLY);
-    if (-1 == fd) {
+    if (fd == -1) {
         fprintf(stderr, "Failed to open gpio value for writing!\n");
-        return(-1);
+        return -1;
     }
 
     if (1 != write(fd, &s_values_str[LOW == value ? 0 : 1], 1)) {
         fprintf(stderr, "Failed to write value!\n");
-        return(-1);
+        return -1;
     }
 
     close(fd);
-    return(0);
+    return 0;
+}
+
+/*
+ *  Writes edge to gpio pin, "none" means poll function, "rising"=rising edge,
+ *  falling=falling edge, both=both combined.
+ */
+
+int SysfsGpio::GPIOEdge(char *edge)
+{
+    char path[VALUE_MAX];
+    int fd;
+    snprintf(path,VALUE_MAX,"/sys/class/gpio%d/edge",pin_);
+    fd = open(path,O_WRONLY);
+    if (fd == -1){
+        fprintf(stderr, "Failed to open edge! file\n");
+        return -1;
+    }
+    if(1 != write(fd,edge,strlen(edge))){
+        fprintf(stderr,"Failed to write Edge!\n");
+        return -1;
+    }
+    close(fd);
+    return 0;
+
 }
 
 /*
